@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>J.A.R.V.I.S</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #020b18; color: #fff; font-family: monospace; min-height: 100vh; overflow-x: hidden; position: relative; }
+
+  /* Scanline overlay */
+  body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,150,255,0.015) 2px, rgba(0,150,255,0.015) 4px); pointer-events: none; z-index: 1; }
+
+  /* Corner brackets */
+  .corner { position: fixed; width: 44px; height: 44px; border-color: #1a6aff; border-style: solid; opacity: 0.6; z-index: 100; transition: all 2s ease; pointer-events: none; }
+  .corner.tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; }
+  .corner.tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; }
+  .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; }
+  .corner.glow { border-color: #4a9adf; opacity: 0.95; box-shadow: 0 0 12px rgba(74,154,223,0.5); }
+
+  canvas#particles { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
+  .hud { position: relative; z-index: 5; padding: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .title-block .eyebrow { font-size: 8px; letter-spacing: 4px; color: #1a6aff; margin-bottom: 2px; }
+  .title-block .title { font-size: 22px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 20px rgba(26,106,255,0.5); }
+  .title-block .sub { font-size: 8px; color: #2a4a7a; letter-spacing: 2px; margin-top: 2px; }
+  .clock-block { text-align: right; }
+  .clock-block .time { font-size: 24px; font-weight: 900; color: #1a6aff; letter-spacing: 2px; text-shadow: 0 0 15px rgba(26,106,255,0.6); }
+  .clock-block .date { font-size: 8px; color: #2a5a8a; letter-spacing: 1px; margin-top: 2px; }
+  .clock-block .status { font-size: 8px; color: #00d4a0; letter-spacing: 2px; margin-top: 3px; }
+
+  /* Nav */
+  .nav { display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap; }
+  .nav button { background: rgba(26,106,255,0.1); border: 1px solid #1a3a6a; color: #4a9adf; font-family: monospace; font-size: 9px; padding: 5px 10px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; }
+  .nav button.active { background: rgba(26,106,255,0.4); border-color: #4a9adf; color: #fff; box-shadow: 0 0 10px rgba(26,106,255,0.3); }
+  .nav button.routine { background: rgba(255,170,0,0.2); border-color: #ffaa00; color: #ffaa00; }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Home */
+  .greeting { text-align: center; margin-bottom: 14px; padding: 8px 0; }
+  .greeting .hello { font-size: 16px; font-weight: 300; letter-spacing: 4px; color: #aaa; margin-bottom: 2px; }
+  .greeting .name { font-size: 28px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 30px rgba(26,106,255,0.4); }
+  .greeting .day { font-size: 8px; color: #2a5a8a; letter-spacing: 3px; margin-top: 4px; }
+
+  .orb-wrap { display: flex; justify-content: center; margin-bottom: 14px; }
+
+  /* Revenue card */
+  .revenue { background: rgba(0,40,120,0.4); border: 2px solid #1a5adf; border-radius: 8px; padding: 12px 16px; text-align: center; margin-bottom: 14px; box-shadow: 0 0 20px rgba(26,90,223,0.2); }
+  .revenue .label { font-size: 8px; letter-spacing: 4px; color: #4a7aaf; margin-bottom: 6px; }
+  .revenue .goal { font-size: 28px; font-weight: 900; }
+  .revenue .goal span { font-size: 13px; color: #4a7aaf; }
+  .rev-bar-bg { background: #0a1e38; height: 4px; margin: 8px 0 4px; border-radius: 2px; overflow: hidden; }
+  .rev-bar { width: 53%; height: 100%; background: linear-gradient(90deg,#1a6aff,#00d4a0); box-shadow: 0 0 8px rgba(0,212,160,0.5); }
+  .rev-stats { display: flex; justify-content: center; gap: 32px; margin-top: 8px; }
+  .rev-stats .stat-label { font-size: 8px; color: #2a5a8a; letter-spacing: 1px; }
+  .rev-stats .stat-val { font-size: 16px; font-weight: 900; }
+  .rev-stats .stat-val.gold { color: #ffaa00; }
+  .rev-stats .stat-val.red { color: #ff5555; }
+  .rev-footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 8px; color: #1a4a7a; }
+
+  /* Ideas */
+  .ideas { background: rgba(0,30,60,0.4); border: 1px solid #0a2a5a; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; }
+  .ideas .section-label { font-size: 8px; letter-spacing: 3px; color: #1a4a7a; margin-bottom: 8px; }
+  .idea-row { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid #0a1e38; }
+  .idea-row:last-child { border-bottom: none; }
+  .idea-num { font-size: 10px; color: #1a6aff; font-weight: 700; flex-shrink: 0; }
+  .idea-text { font-size: 10px; color: #aaa; line-height: 1.5; flex: 1; }
+  .idea-btn { background: rgba(79,195,247,0.1); border: 1px solid rgba(79,195,247,0.2); color: #4FC3F7; font-family: monospace; font-size: 8px; padding: 2px 7px; cursor: pointer; flex-shrink: 0; }
+
+  /* Status tiles */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+  .tile { background: rgba(0,20,60,0.5); border: 1px solid #0a2a5a; border-radius: 6px; padding: 8px 10px; cursor: pointer; text-align: center; }
+  .tile-dot { width: 7px; height: 7px; border-radius: 50%; margin: 0 auto 5px; }
+  .tile-label { font-size: 8px; color: #2a5a8a; letter-spacing: 1px; }
+  .tile-val { font-size: 10px; font-weight: 700; margin-top: 2px; }
+
+  /* Activity log */
+  .log { background: rgba(0,20,40,0.4); border-radius: 6px; padding: 8px 12px; }
+  .log .section-label { font-size: 8px; color: #1a4a7a; letter-spacing: 2px; margin-bottom: 5px; }
+  .log-row { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid #050f1e; }
+  .log-time { font-size: 8px; color: #1a6aff; flex-shrink: 0; }
+  .log-msg { font-size: 8px; color: #2a5a8a; }
+
+  /* Inbox */
+  .inbox-wrap { background: rgba(0,30,80,0.3); border: 1px solid #0a2a5a; border-radius: 6px; padding: 12px 14px; }
+  .inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .inbox-title { font-size: 8px; letter-spacing: 3px; color: #1a4a7a; }
+  .filter-btns { display: flex; gap: 3px; }
+  .filter-btn { background: transparent; border: 1px solid #1a3a6a; color: #2a5a8a; font-family: monospace; font-size: 8px; padding: 2px 7px; cursor: pointer; }
+  .filter-btn.active { background: #1a6aff; color: #fff; }
+  .email-row { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid #050f1e; align-items: center; }
+  .email-avatar { width: 22px; height: 22px; border-radius: 50%; background: rgba(26,106,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 9px; color: #4a9adf; flex-shrink: 0; }
+  .email-body { flex: 1; min-width: 0; }
+  .email-subject { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .email-from { font-size: 8px; color: #2a4a7a; }
+  .email-time { font-size: 8px; color: #1a3a6a; flex-shrink: 0; }
+  .email-dot { width: 5px; height: 5px; border-radius: 50%; background: #1a6aff; box-shadow: 0 0 6px #1a6aff; flex-shrink: 0; }
+
+  /* Social */
+  .social-wrap { background: rgba(0,30,80,0.3); border: 1px solid #0a2a5a; border-radius: 6px; padding: 12px 14px; }
+  .social-label { font-size: 8px; letter-spacing: 3px; color: #9a70df; margin-bottom: 10px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .chip { background: rgba(150,100,200,0.1); border: 1px solid rgba(150,100,200,0.2); color: #9a70df; font-family: monospace; font-size: 8px; padding: 4px 8px; cursor: pointer; }
+  .chip.blue { background: rgba(79,195,247,0.1); border-color: rgba(79,195,247,0.2); color: #4FC3F7; }
+  .input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .hud-input { flex: 1; background: rgba(0,20,60,0.6); border: 1px solid #0a3a7a; color: #4a9adf; font-family: monospace; font-size: 10px; padding: 6px 8px; outline: none; }
+  .hud-btn { border: none; font-family: monospace; font-size: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700; }
+  .hud-btn.purple { background: #9a70df; color: #fff; }
+  .hud-btn.cyan { background: #4FC3F7; color: #000; }
+  .reply-box { background: rgba(0,0,0,0.3); border-left: 2px solid #9a70df; padding: 8px 10px; margin-bottom: 14px; }
+  .reply-dm { font-size: 8px; color: #4a3a6a; margin-bottom: 3px; }
+  .reply-text { font-size: 11px; color: #ccc; line-height: 1.7; }
+  .divider { border-top: 1px solid #0a1e38; padding-top: 12px; margin-top: 4px; }
+  .post-box { background: rgba(0,0,0,0.3); border-left: 2px solid #4FC3F7; padding: 8px 12px; }
+  .post-topic-label { font-size: 8px; color: #2a5a8a; margin-bottom: 4px; letter-spacing: 2px; }
+  .post-caption { font-size: 11px; color: #ccc; line-height: 1.8; margin-bottom: 6px; }
+  .post-tags { font-size: 9px; color: #4FC3F7; margin-bottom: 8px; }
+  .copy-btn { background: rgba(79,195,247,0.15); border: 1px solid rgba(79,195,247,0.3); color: #4FC3F7; font-family: monospace; font-size: 8px; padding: 4px 10px; cursor: pointer; }
+
+  /* Agents */
+  .agents-wrap { background: rgba(0,30,80,0.3); border: 1px solid #0a2a5a; border-radius: 6px; padding: 12px 14px; }
+  .agents-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .agents-label { font-size: 8px; letter-spacing: 3px; color: #ffaa00; }
+  .run-all-btn { background: #ffaa00; border: none; color: #000; font-family: monospace; font-size: 8px; padding: 4px 12px; cursor: pointer; font-weight: 700; }
+  .agent-row { margin-bottom: 8px; }
+  .agent-card { display: flex; justify-content: space-between; align-items: center; background: rgba(0,20,60,0.4); border: 1px solid #0a2a5a; border-radius: 4px; padding: 8px 10px; }
+  .agent-name { font-size: 11px; color: #4a9adf; }
+  .agent-time { font-size: 8px; color: #1a4a7a; }
+  .agent-run-btn { background: rgba(26,106,255,0.3); border: 1px solid #1a5adf; color: #4a9adf; font-family: monospace; font-size: 8px; padding: 4px 10px; cursor: pointer; }
+  .agent-run-btn.running { background: #1a2a4a; cursor: default; }
+  .agent-result { background: rgba(0,0,0,0.3); border-left: 2px solid #1a6aff; padding: 6px 10px; font-size: 9px; color: #4a7aaf; white-space: pre-line; line-height: 1.7; }
+
+  /* Setup */
+  .setup-wrap { background: rgba(0,30,80,0.3); border: 1px solid #0a2a5a; border-radius: 6px; padding: 12px 14px; }
+  .setup-label { font-size: 8px; letter-spacing: 3px; color: #1a4a7a; margin-bottom: 5px; }
+  .setup-bar-bg { background: #0a1e38; height: 4px; border-radius: 2px; overflow: hidden; margin-bottom: 12px; }
+  .setup-bar { height: 100%; background: linear-gradient(90deg,#1a6aff,#00d4a0); box-shadow: 0 0 8px rgba(0,212,160,0.4); }
+  .setup-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #050f1e; }
+  .setup-check { width: 13px; height: 13px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; }
+  .setup-check.done { background: #1a6aff; border: 1px solid #1a6aff; box-shadow: 0 0 6px rgba(26,106,255,0.5); }
+  .setup-check.todo { background: transparent; border: 1px solid #1a3a6a; }
+  .setup-item { font-size: 9px; }
+  .setup-item.done { color: #4a7aaf; text-decoration: line-through; }
+  .setup-item.todo { color: #1a3a6a; }
+
+  /* Bottom bar */
+  .quick-actions { display: flex; gap: 5px; margin-top: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .quick-btn { background: rgba(26,106,255,0.15); border: 1px solid #1a3a6a; color: #4a9adf; font-family: monospace; font-size: 8px; padding: 4px 9px; cursor: pointer; letter-spacing: 1px; }
+  .cmd-bar { display: flex; gap: 5px; }
+  .cmd-input { flex: 1; background: rgba(0,20,60,0.6); border: 1px solid #0a3a7a; color: #4a9adf; font-family: monospace; font-size: 10px; padding: 7px 10px; outline: none; }
+  .cmd-execute { background: #1a5adf; border: none; color: #fff; font-family: monospace; font-size: 8px; padding: 7px 14px; cursor: pointer; letter-spacing: 2px; }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div class="hud">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title-block">
+      <div class="eyebrow">JARVIS V1.1</div>
+      <div class="title">J.A.R.V.I.S</div>
+      <div class="sub">JASON · LIFESTYLE & TRAVEL</div>
+    </div>
+    <div class="clock-block">
+      <div class="time" id="clock">--:--:--</div>
+      <div class="date" id="date-display"></div>
+      <div class="status">ALL SYSTEMS NOMINAL</div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <button class="active" onclick="showPanel('home',this)">HOME</button>
+    <button onclick="showPanel('inbox',this)">INBOX</button>
+    <button onclick="showPanel('social',this)">SOCIAL</button>
+    <button onclick="showPanel('agents',this)">AGENTS</button>
+    <button onclick="showPanel('setup',this)">SETUP</button>
+    <button class="routine" onclick="runAll()">RUN ROUTINE</button>
+  </div>
+
+  <!-- HOME -->
+  <div id="panel-home" class="panel active">
+    <div class="greeting">
+      <div class="hello" id="greeting-text">Good morning,</div>
+      <div class="name">JASON.</div>
+      <div class="day" id="day-text">MONDAY BRIEFING READY</div>
+    </div>
+
+    <div class="orb-wrap">
+      <canvas id="orb" width="220" height="220"></canvas>
+    </div>
+
+    <div class="revenue">
+      <div class="label">PRIMARY OBJECTIVE</div>
+      <div class="goal">$30,000<span>/mo</span></div>
+      <div class="rev-bar-bg"><div class="rev-bar"></div></div>
+      <div class="rev-stats">
+        <div>
+          <div class="stat-label">REVENUE YTD</div>
+          <div class="stat-val gold">$15,897</div>
+        </div>
+        <div>
+          <div class="stat-label">REMAINING</div>
+          <div class="stat-val red">$14,103</div>
+        </div>
+      </div>
+      <div class="rev-footer"><span>53% COMPLETE</span><span>IN PROGRESS</span><span>ETA Q3 2026</span></div>
+    </div>
+
+    <div class="ideas">
+      <div class="section-label">TODAY'S CONTENT IDEAS</div>
+      <div class="idea-row">
+        <div class="idea-num">1.</div>
+        <div class="idea-text">Things I wish I knew before booking a solo trip</div>
+        <button class="idea-btn" onclick="draftPost('solo trip lessons')">DRAFT</button>
+      </div>
+      <div class="idea-row">
+        <div class="idea-num">2.</div>
+        <div class="idea-text">My honest $50/day travel budget breakdown</div>
+        <button class="idea-btn" onclick="draftPost('budget travel tips')">DRAFT</button>
+      </div>
+      <div class="idea-row">
+        <div class="idea-num">3.</div>
+        <div class="idea-text">Hidden gem I found that is not on any blog</div>
+        <button class="idea-btn" onclick="draftPost('hidden gem')">DRAFT</button>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile" onclick="showPanel('inbox',null)">
+        <div class="tile-dot" style="background:#4FC3F7;box-shadow:0 0 8px #4FC3F7"></div>
+        <div class="tile-label">INBOX</div>
+        <div class="tile-val" style="color:#4FC3F7">201 UNREAD</div>
+      </div>
+      <div class="tile" onclick="showPanel('social',null)">
+        <div class="tile-dot" style="background:#00d4a0;box-shadow:0 0 8px #00d4a0"></div>
+        <div class="tile-label">INSTAGRAM</div>
+        <div class="tile-val" style="color:#00d4a0">ONLINE</div>
+      </div>
+      <div class="tile" onclick="showPanel('agents',null)">
+        <div class="tile-dot" style="background:#CE93D8;box-shadow:0 0 8px #CE93D8"></div>
+        <div class="tile-label">META ADS</div>
+        <div class="tile-val" style="color:#CE93D8">ONLINE</div>
+      </div>
+    </div>
+
+    <div class="log">
+      <div class="section-label">ACTIVITY LOG</div>
+      <div id="log-entries">
+        <div class="log-row"><span class="log-time">init</span><span class="log-msg">GMAIL CONNECTED — 201 UNREAD</span></div>
+        <div class="log-row"><span class="log-time">init</span><span class="log-msg">ELEVENLABS — DANIEL (BRITISH) ONLINE</span></div>
+        <div class="log-row"><span class="log-time">init</span><span class="log-msg">META TOKEN CONFIRMED — INSTAGRAM + ADS ONLINE</span></div>
+        <div class="log-row"><span class="log-time">init</span><span class="log-msg">POST DRAFTER ONLINE</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INBOX -->
+  <div id="panel-inbox" class="panel">
+    <div class="inbox-wrap">
+      <div class="inbox-header">
+        <div class="inbox-title">LIVE INBOX — 201 UNREAD</div>
+        <div class="filter-btns">
+          <button class="filter-btn active" onclick="filterEmail('all',this)">ALL</button>
+          <button class="filter-btn" onclick="filterEmail('important',this)">IMPORTANT</button>
+          <button class="filter-btn" onclick="filterEmail('noise',this)">NOISE</button>
+        </div>
+      </div>
+      <div id="email-list"></div>
+    </div>
+  </div>
+
+  <!-- SOCIAL -->
+  <div id="panel-social" class="panel">
+    <div class="social-wrap">
+      <div class="social-label">DM REPLY GENERATOR — JASON'S VOICE</div>
+      <div class="chip-row" id="dm-chips"></div>
+      <div class="input-row">
+        <input class="hud-input" id="dm-input" placeholder="PASTE DM HERE..." onkeydown="if(event.key==='Enter')replyDM()">
+        <button class="hud-btn purple" onclick="replyDM()">REPLY</button>
+      </div>
+      <div id="dm-reply-box" style="display:none" class="reply-box">
+        <div class="reply-dm" id="dm-original"></div>
+        <div class="reply-text" id="dm-response"></div>
+      </div>
+
+      <div class="divider">
+        <div class="social-label" style="color:#4FC3F7;margin-bottom:8px">POST DRAFTER — LIFESTYLE & TRAVEL</div>
+        <div class="chip-row" id="post-chips"></div>
+        <div class="input-row">
+          <input class="hud-input" id="post-input" placeholder="TYPE A TOPIC OR IDEA..." onkeydown="if(event.key==='Enter')makeDraft()">
+          <button class="hud-btn cyan" onclick="makeDraft()">DRAFT</button>
+        </div>
+        <div id="post-draft-box" style="display:none" class="post-box">
+          <div class="post-topic-label" id="post-topic-label"></div>
+          <div class="post-caption" id="post-caption-text"></div>
+          <div class="post-tags" id="post-tags-text"></div>
+          <button class="copy-btn" onclick="copyCaption()">COPY CAPTION</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENTS -->
+  <div id="panel-agents" class="panel">
+    <div class="agents-wrap">
+      <div class="agents-header">
+        <div class="agents-label">AGENTS — RUNS 06:00 AM DAILY</div>
+        <button class="run-all-btn" onclick="runAll()">RUN ALL</button>
+      </div>
+      <div class="agent-row">
+        <div class="agent-card">
+          <div><div class="agent-name">MORNING BRIEFING</div><div class="agent-time">06:00 AM</div></div>
+          <button class="agent-run-btn" id="btn-briefing" onclick="runAgent('briefing')">RUN</button>
+        </div>
+        <div id="result-briefing" class="agent-result" style="display:none"></div>
+      </div>
+      <div class="agent-row">
+        <div class="agent-card">
+          <div><div class="agent-name">CONTENT IDEAS</div><div class="agent-time">06:02 AM</div></div>
+          <button class="agent-run-btn" id="btn-content" onclick="runAgent('content')">RUN</button>
+        </div>
+        <div id="result-content" class="agent-result" style="display:none"></div>
+      </div>
+      <div class="agent-row">
+        <div class="agent-card">
+          <div><div class="agent-name">DM TRIAGE</div><div class="agent-time">06:04 AM</div></div>
+          <button class="agent-run-btn" id="btn-dms" onclick="runAgent('dms')">RUN</button>
+        </div>
+        <div id="result-dms" class="agent-result" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETUP -->
+  <div id="panel-setup" class="panel">
+    <div class="setup-wrap">
+      <div class="setup-label">SETUP CHECKLIST — 10/11</div>
+      <div class="setup-bar-bg"><div class="setup-bar" style="width:91%"></div></div>
+      <div id="setup-list"></div>
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="quick-actions">
+    <button class="quick-btn" onclick="showPanel('inbox',null);addLog('INBOX OPENED')">CHECK INBOX</button>
+    <button class="quick-btn" onclick="showPanel('social',null);addLog('SOCIAL OPENED')">DRAFT A POST</button>
+    <button class="quick-btn" onclick="showPanel('agents',null);addLog('AGENTS OPENED')">SHOW AGENTS</button>
+    <button class="quick-btn" onclick="showPanel('setup',null);addLog('SETUP OPENED')">SETUP</button>
+  </div>
+
+  <div class="cmd-bar">
+    <input class="cmd-input" id="cmd-input" placeholder="> ENTER COMMAND..." onkeydown="if(event.key==='Enter')runCmd()">
+    <button class="cmd-execute" onclick="runCmd()">EXECUTE</button>
+  </div>
+
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────
+const EMAILS = [
+  { from:"Google", subject:"Security alert", time:"5:56 PM", important:true },
+  { from:"LinkedIn", subject:"Armed Security Officer job alert", time:"5:45 PM", important:false },
+  { from:"Pinterest", subject:"Your vibe has arrived", time:"5:17 PM", important:false },
+  { from:"The Rundown AI", subject:"Welcome! 3 quick steps", time:"5:16 PM", important:false },
+  { from:"The Ameritalians", subject:"Two gifts for you", time:"5:04 PM", important:true },
+  { from:"LinkedIn", subject:"Executive Protection job alert", time:"4:55 PM", important:false },
+  { from:"Cruise Critic", subject:"5 Nightmare Stories", time:"4:18 PM", important:false },
+  { from:"LinkedIn", subject:"James accepted your invitation", time:"2:55 PM", important:true },
+];
+
+const KB = {
+  afford: "Honestly a mix of things — some brand deals, being smart about when/where I book, and prioritizing it. I share tips on my page too!",
+  collab: "Love the energy! Send me your handle and what you're thinking and I'll check it out",
+  camera: "I keep it simple — mostly just my phone tbh. Lighting and timing matter more than gear imo!",
+  next: "Check my stories for the latest — I usually post where I'm at in real time!",
+  start: "Just start! Don't wait for the perfect trip. Document what you have and build from there.",
+  sponsorship: "Hey! Thanks for reaching out. I'm selective about what I partner with — send me more details and I'll take a look!",
+};
+
+const AGENT_RESULTS = {
+  briefing: "URGENT: Google security alert — review access\nNEEDS REPLY: Ameritalians offer expires soon\nFYI: 8 newsletters filtered",
+  content: "1. Things I wish I knew before solo travel\n2. My honest $50/day budget breakdown\n3. Hidden gem not on any blog",
+  dms: "NEEDS YOU: 1 collab inquiry (brand deal)\nAUTO-REPLIED: 4 fan questions in your voice\nIGNORED: 2 spam messages",
+};
+
+const SETUP_STEPS = [
+  { label:"Jarvis Dashboard", done:true },
+  { label:"Voice (ElevenLabs)", done:true },
+  { label:"Browser (Claude for Chrome)", done:true },
+  { label:"Revenue (RevenueCat) — deferred", done:false },
+  { label:"Auto-post (Buffer workaround)", done:true },
+  { label:"Instagram Analytics", done:true },
+  { label:"Ads (Meta Ads MCP)", done:true },
+  { label:"Inbox (Gmail MCP)", done:true },
+  { label:"Customer Voice", done:true },
+  { label:"Specialized Agents", done:true },
+  { label:"Routines (/schedule)", done:true },
+];
+
+const DM_CHIPS = ["How do you afford travel?","Can we collab?","What camera do you use?","Where are you next?"];
+const POST_CHIPS = ["Hidden gem I found","Travel budget tips","Solo trip lessons","Packing essentials"];
+const HASHTAGS = "#travel #lifestyle #travelblogger #solotravel #travellife #wanderlust #traveltips #contentcreator #travelgram #adventuretime";
+
+let currentCaption = "";
+let emailFilter = "all";
+let currentPanel = "home";
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function getDMReply(msg) {
+  const lower = msg.toLowerCase();
+  for (const key of Object.keys(KB)) {
+    if (lower.includes(key)) return KB[key];
+  }
+  return "Hey, thanks for the message! Give me a sec to get back to you — appreciate the love!";
+}
+
+function getCaption(topic) {
+  const lower = topic.toLowerCase();
+  if (lower.includes("gem") || lower.includes("hidden")) return "Found a place so good I almost didn't want to share it. No influencers. No crowds. Just the kind of spot that reminds you why you travel in the first place. Drop a comment if you want the name.";
+  if (lower.includes("budget") || lower.includes("afford")) return "Real talk — I spent $50 a day on my last trip and ate better than I do at home. It's not about having money, it's about knowing where to put it. Here's exactly how I did it.";
+  if (lower.includes("solo") || lower.includes("lesson")) return "Three years of solo travel and the biggest lesson hit me on day two of my last trip. You don't find yourself travelling alone. You just finally get comfortable being with yourself.";
+  if (lower.includes("pack") || lower.includes("essential")) return "I used to check bags. Now I fit everything into a carry-on and move faster, stress less, and never wait at baggage claim. Here's the exact list that changed how I travel.";
+  return "Just back from somewhere that completely reset my perspective. Sometimes you need to get uncomfortable to remember what actually matters. More coming this week.";
+}
+
+function addLog(msg) {
+  const t = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  const el = document.getElementById("log-entries");
+  const row = document.createElement("div");
+  row.className = "log-row";
+  row.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${msg}</span>`;
+  el.insertBefore(row, el.firstChild);
+  while (el.children.length > 6) el.removeChild(el.lastChild);
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent = now.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  document.getElementById("date-display").textContent = now.toLocaleDateString([], { weekday:"long", month:"long", day:"numeric" }).toUpperCase();
+  const days = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+  document.getElementById("day-text").textContent = days[now.getDay()] + " BRIEFING READY";
+  const h = now.getHours();
+  document.getElementById("greeting-text").textContent = (h < 12 ? "Good morning," : h < 17 ? "Good afternoon," : h < 21 ? "Good evening," : "Good night,");
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Corner glow ───────────────────────────────────────────────────────────
+let glowOn = false;
+setInterval(() => {
+  glowOn = !glowOn;
+  document.querySelectorAll(".corner").forEach(c => c.classList.toggle("glow", glowOn));
+}, 2000);
+
+// ── Particle background ───────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById("particles");
+  const ctx = canvas.getContext("2d");
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize();
+  window.addEventListener("resize", resize);
+  const pts = Array.from({length:55}, () => ({
+    x: Math.random()*window.innerWidth, y: Math.random()*window.innerHeight,
+    vx: (Math.random()-0.5)*0.15, vy: (Math.random()-0.5)*0.15,
+    r: Math.random()*1.2+0.2, a: Math.random()*0.25+0.05
+  }));
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pts.forEach(p => {
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0) p.x=canvas.width; if(p.x>canvas.width) p.x=0;
+      if(p.y<0) p.y=canvas.height; if(p.y>canvas.height) p.y=0;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(40,120,255,${p.a})`; ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── Arc reactor orb ───────────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById("orb");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const CX=110, CY=110;
+  let t=0;
+  const pts = Array.from({length:70}, () => ({
+    x: CX+(Math.random()-0.5)*90, y: CY+(Math.random()-0.5)*90,
+    vx: (Math.random()-0.5)*0.35, vy: (Math.random()-0.5)*0.35,
+    r: Math.random()*1.5+0.3
+  }));
+  function draw() {
+    ctx.clearRect(0,0,220,220);
+    ctx.beginPath(); ctx.arc(CX,CY,85,0,Math.PI*2);
+    ctx.fillStyle="rgba(0,15,50,0.8)"; ctx.fill();
+    ctx.strokeStyle="rgba(26,106,255,0.25)"; ctx.lineWidth=1; ctx.stroke();
+    for(let r=18;r<82;r+=14){
+      ctx.beginPath(); ctx.arc(CX,CY,r,0,Math.PI*2);
+      ctx.strokeStyle="rgba(26,106,255,0.07)"; ctx.lineWidth=0.5; ctx.stroke();
+    }
+    pts.forEach(p => {
+      p.x+=p.vx; p.y+=p.vy;
+      const dx=p.x-CX, dy=p.y-CY;
+      if(dx*dx+dy*dy>85*85){p.x=CX+(Math.random()-0.5)*70;p.y=CY+(Math.random()-0.5)*70;}
+      const a=0.2+0.35*Math.sin(t*0.02+p.x*0.05);
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(60,140,255,${a})`; ctx.fill();
+    });
+    for(let i=0;i<48;i++){
+      const angle=(i/48)*Math.PI*2+t*0.007;
+      ctx.beginPath();
+      ctx.moveTo(CX+96*Math.cos(angle),CY+96*Math.sin(angle));
+      ctx.lineTo(CX+96*Math.cos(angle+0.065),CY+96*Math.sin(angle+0.065));
+      ctx.strokeStyle=i%5===0?"rgba(26,106,255,0.95)":"rgba(26,106,255,0.12)";
+      ctx.lineWidth=i%5===0?2:0.5; ctx.stroke();
+    }
+    const pulse=0.35+0.2*Math.sin(t*0.04);
+    ctx.beginPath(); ctx.arc(CX,CY,32,0,Math.PI*2);
+    ctx.fillStyle=`rgba(26,106,255,${pulse*0.4})`; ctx.fill();
+    ctx.strokeStyle=`rgba(26,106,255,${pulse+0.2})`; ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX,CY,14,0,Math.PI*2);
+    ctx.fillStyle=`rgba(120,190,255,${0.3+0.25*Math.sin(t*0.06)})`; ctx.fill();
+    t++; requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── Nav / Panels ──────────────────────────────────────────────────────────
+function showPanel(id, btnEl) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-"+id).classList.add("active");
+  document.querySelectorAll(".nav button:not(.routine)").forEach(b => b.classList.remove("active"));
+  if (btnEl) btnEl.classList.add("active");
+  currentPanel = id;
+}
+
+// ── Email ─────────────────────────────────────────────────────────────────
+function renderEmails() {
+  const list = document.getElementById("email-list");
+  const data = emailFilter === "important" ? EMAILS.filter(e=>e.important)
+    : emailFilter === "noise" ? EMAILS.filter(e=>!e.important) : EMAILS;
+  list.innerHTML = data.map(e => `
+    <div class="email-row">
+      <div class="email-avatar">${e.from[0]}</div>
+      <div class="email-body">
+        <div class="email-subject" style="color:${e.important?'#fff':'#4a7aaf'}">${e.subject}</div>
+        <div class="email-from">${e.from}</div>
+      </div>
+      <div class="email-time">${e.time}</div>
+      ${e.important ? '<div class="email-dot"></div>' : ''}
+    </div>`).join("");
+}
+renderEmails();
+
+function filterEmail(f, btn) {
+  emailFilter = f;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderEmails();
+}
+
+// ── DM Chips ──────────────────────────────────────────────────────────────
+document.getElementById("dm-chips").innerHTML = DM_CHIPS.map(c =>
+  `<button class="chip" onclick="quickDM('${c.replace(/'/g,"\\'")}')"> ${c}</button>`).join("");
+
+document.getElementById("post-chips").innerHTML = POST_CHIPS.map(c =>
+  `<button class="chip blue" onclick="draftPost('${c.replace(/'/g,"\\'")}')"> ${c}</button>`).join("");
+
+function quickDM(msg) { showDMReply(msg, getDMReply(msg)); }
+
+function replyDM() {
+  const val = document.getElementById("dm-input").value.trim();
+  if (!val) return;
+  showDMReply(val, getDMReply(val));
+  document.getElementById("dm-input").value = "";
+}
+
+function showDMReply(dm, response) {
+  document.getElementById("dm-original").textContent = `DM: "${dm}"`;
+  document.getElementById("dm-response").textContent = response;
+  document.getElementById("dm-reply-box").style.display = "block";
+  addLog("DM REPLY GENERATED");
+}
+
+// ── Post Drafter ──────────────────────────────────────────────────────────
+function draftPost(topic) {
+  const caption = getCaption(topic);
+  currentCaption = caption + "\n\n" + HASHTAGS;
+  document.getElementById("post-topic-label").textContent = "TOPIC: " + topic.toUpperCase();
+  document.getElementById("post-caption-text").textContent = caption;
+  document.getElementById("post-tags-text").textContent = HASHTAGS;
+  document.getElementById("post-draft-box").style.display = "block";
+  showPanel("social", null);
+  addLog("POST DRAFTED: " + topic.substring(0,25).toUpperCase());
+}
+
+function makeDraft() {
+  const val = document.getElementById("post-input").value.trim();
+  if (!val) return;
+  draftPost(val);
+  document.getElementById("post-input").value = "";
+}
+
+function copyCaption() {
+  if (navigator.clipboard) navigator.clipboard.writeText(currentCaption);
+  addLog("CAPTION COPIED TO CLIPBOARD");
+}
+
+// ── Agents ────────────────────────────────────────────────────────────────
+function runAgent(id) {
+  const btn = document.getElementById("btn-"+id);
+  btn.textContent = "RUNNING...";
+  btn.classList.add("running");
+  btn.disabled = true;
+  setTimeout(() => {
+    const res = document.getElementById("result-"+id);
+    res.textContent = AGENT_RESULTS[id];
+    res.style.display = "block";
+    btn.textContent = "RUN";
+    btn.classList.remove("running");
+    btn.disabled = false;
+    addLog("AGENT " + id.toUpperCase() + " COMPLETE");
+    jarvisSpeak(AGENT_RESULTS[id]);
+  }, 1800);
+}
+
+function runAll() {
+  ["briefing","content","dms"].forEach((id,i) => setTimeout(() => runAgent(id), i*2100));
+  addLog("MORNING ROUTINE EXECUTING");
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────
+document.getElementById("setup-list").innerHTML = SETUP_STEPS.map((s,i) => `
+  <div class="setup-row">
+    <div class="setup-check ${s.done?'done':'todo'}">${s.done?'✓':''}</div>
+    <span class="setup-item ${s.done?'done':'todo'}">${i+1}. ${s.label.toUpperCase()}</span>
+  </div>`).join("");
+
+// ── ElevenLabs Voice (Daniel) ─────────────────────────────────────────────
+const XI_API_KEY = "ce636f2b5bab5799935ca899ef8dc44b4501dad2aecc6dbed9ad22cdcc1e1ba5";
+const DANIEL_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17";
+let audioQueue = [];
+let isPlaying = false;
+
+async function speak(text) {
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${DANIEL_VOICE_ID}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": XI_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+      })
+    });
+    if (!response.ok) { addLog("VOICE ERROR: " + response.status); return; }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); isPlaying = false; playNext(); };
+    audio.play();
+    isPlaying = true;
+    addLog("DANIEL SPEAKING...");
+  } catch(e) { addLog("VOICE ERROR: " + e.message); }
+}
+
+function playNext() {
+  if (audioQueue.length > 0 && !isPlaying) {
+    speak(audioQueue.shift());
+  }
+}
+
+function jarvisSpeak(text) {
+  if (isPlaying) { audioQueue.push(text); } else { speak(text); }
+}
+
+// Greeting on load
+window.addEventListener("load", () => {
+  const h = new Date().getHours();
+  const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  setTimeout(() => {
+    jarvisSpeak(`${greeting}, Jason. All systems are online. I am ready to assist.`);
+  }, 1200);
+});
+
+// ── Command bar ───────────────────────────────────────────────────────────
+function runCmd() {
+  const input = document.getElementById("cmd-input");
+  const val = input.value.trim().toLowerCase();
+  if (!val) return;
+  if (val.includes("inbox") || val.includes("email")) showPanel("inbox", null);
+  else if (val.includes("dm") || val.includes("social") || val.includes("post")) showPanel("social", null);
+  else if (val.includes("routine") || val.includes("morning")) runAll();
+  else if (val.includes("agent")) showPanel("agents", null);
+  else if (val.includes("home")) showPanel("home", null);
+  else if (val.includes("setup")) showPanel("setup", null);
+  addLog("CMD: " + val.toUpperCase());
+  input.value = "";
+}
+</script>
+</body>
+</html>
